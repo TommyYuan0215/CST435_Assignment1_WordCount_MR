@@ -21,9 +21,6 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 
 _sym_db = _symbol_database.Default()
 
-
-
-
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fmapreduce.proto\" \n\nMapRequest\x12\x12\n\ninput_data\x18\x01 \x01(\t\"\x1d\n\x0bMapResponse\x12\x0e\n\x06mapped\x18\x01 \x03(\t\"$\n\rReduceRequest\x12\x13\n\x0bmapped_data\x18\x01 \x03(\t\" \n\x0eReduceResponse\x12\x0e\n\x06result\x18\x01 \x01(\t2g\n\x10MapReduceService\x12$\n\x07MapTask\x12\x0b.MapRequest\x1a\x0c.MapResponse\x12-\n\nReduceTask\x12\x0e.ReduceRequest\x1a\x0f.ReduceResponseb\x06proto3')
 
 _globals = globals()

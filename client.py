@@ -1,27 +1,26 @@
-# client.py
 import grpc
 import mapreduce_pb2
 import mapreduce_pb2_grpc
 from collections import defaultdict
-import os # Necessary to check for file existence
+import os
+import time
 
 # --- Configuration ---
-# Define the addresses of your worker servers (gRPC targets)
+# Addresses of workers (service names + internal port in Docker network)
 WORKER_ADDRESSES = [
-    'localhost:50051',  # Worker 1
-    # 'localhost:50052',  # Worker 2 (Uncomment and run another worker.py instance if needed)
+    'worker1:50051',  
+    'worker2:50051',  
+    'worker3:50051',  
 ]
 NUM_WORKERS = len(WORKER_ADDRESSES)
-INPUT_FILE_NAME = "test1.txt" # <<< --- Your target file name
+INPUT_FILE_NAME = "test1.txt" 
 
 def read_input_file(filename):
-    """Reads the entire content of the input file from the working directory."""
+    """Reads the entire content of the input file."""
     if not os.path.exists(filename):
-        # Raise an error if the file is missing
         raise FileNotFoundError(f"Error: The input file '{filename}' was not found in the current directory.")
         
     print(f"Reading input data from: {filename}")
-    # Read the file content, ensuring proper encoding
     with open(filename, 'r', encoding='utf-8') as f:
         return f.read()
 
@@ -39,7 +38,6 @@ def split_input_data(data, num_chunks):
 
 def run_map_phase(chunks):
     """Initiates MapTasks on the workers and collects all intermediate results."""
-    
     all_intermediate_data = []
     
     stubs = [
@@ -50,7 +48,7 @@ def run_map_phase(chunks):
     print(f"\n--- Starting Map Phase on {NUM_WORKERS} Workers ---")
     
     for i, chunk in enumerate(chunks):
-        worker_index = i % NUM_WORKERS
+        worker_index = i % NUM_WORKERS  # Round-robin distribution
         stub = stubs[worker_index]
         worker_addr = WORKER_ADDRESSES[worker_index]
         
@@ -73,7 +71,7 @@ def run_map_phase(chunks):
 def run_reduce_phase(intermediate_data):
     """Performs the shuffle, then initiates ReduceTasks."""
     
-    # 1. SHUFFLE / GROUPING 
+    # 1. SHUFFLE / GROUPING (Master groups the data by key)
     grouped_data = defaultdict(list)
     for item in intermediate_data:
         try:
@@ -117,7 +115,14 @@ def run_reduce_phase(intermediate_data):
 
 
 def run_mapreduce():
+    # Initialize start_time to ensure it exists for the finally block
+    start_time = 0
     try:
+        # --- Start Timer ---
+        start_time = time.time()
+        print(f"\n[TIMER] MapReduce Job started at {time.ctime(start_time)}")
+        # -------------------
+
         # Step A: Read the file content
         input_data = read_input_file(INPUT_FILE_NAME)
         
@@ -155,6 +160,14 @@ def run_mapreduce():
         print(e)
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+    finally:
+        # --- Stop Timer and Log Duration ---
+        end_time = time.time()
+        total_duration = end_time - start_time
+        
+        print(f"\n[TIMER] MapReduce Job finished at {time.ctime(end_time)}")
+        print(f"[TIMER] Total Execution Time: {total_duration:.4f} seconds")
+        # -----------------------------------
 
 
 if __name__ == '__main__':

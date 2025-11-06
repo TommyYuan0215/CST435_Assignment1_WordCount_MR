@@ -1,3 +1,6 @@
-MapReduce is a programming model and an associated implementation for processing and generating large datasets.
-It is a great example of distributed computing.
-Distributed computing scales easily.
+MapReduce is a programming model and an associated implementation for processing large datasets. 
+The primary advantage of MapReduce is its ability to perform parallel processing across many machines. 
+This parallel architecture dramatically speeds up the task of counting words. 
+The client orchestrates the whole process, dividing the input text into chunks. 
+Each worker receives a chunk and maps the words to counts. 
+Finally, the reduce workers aggregate the final word counts, giving us the total word frequency across the entire large dataset.
