@@ -1,0 +1,3 @@
+MapReduce is a programming model and an associated implementation for processing and generating large datasets.
+It is a great example of distributed computing.
+Distributed computing scales easily.
