@@ -1,6 +1,5 @@
 import grpc
-import mapreduce_pb2
-import mapreduce_pb2_grpc
+from proto import mapreduce_pb2, mapreduce_pb2_grpc
 from collections import defaultdict
 import os
 import time
@@ -11,17 +10,22 @@ WORKER_ADDRESSES = [
     'worker1:50051',  
     'worker2:50051',  
     'worker3:50051',  
+    'worker4:50051',
+    'worker5:50051',
 ]
 NUM_WORKERS = len(WORKER_ADDRESSES)
 INPUT_FILE_NAME = "test1.txt" 
 
 def read_input_file(filename):
     """Reads the entire content of the input file."""
-    if not os.path.exists(filename):
-        raise FileNotFoundError(f"Error: The input file '{filename}' was not found in the current directory.")
+    # Modify path to look in client directory
+    filepath = os.path.join('client', filename)
+    
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Error: The input file '{filename}' was not found in the client directory.")
         
-    print(f"Reading input data from: {filename}")
-    with open(filename, 'r', encoding='utf-8') as f:
+    print(f"Reading input data from: {filepath}")
+    with open(filepath, 'r', encoding='utf-8') as f:
         return f.read()
 
 def split_input_data(data, num_chunks):

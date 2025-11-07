@@ -1,22 +1,20 @@
-# docker-compose.yaml
 version: '3.8'
 
 services:
   # --- Worker Services ---
-  # These services will run the 'worker.py' server
   worker1:
-    build: . # Build using the Dockerfile in the current directory
-    image: mapreduce-worker # Name the built image
+    build: 
+      context: .
+      dockerfile: server/Dockerfile
+    image: wordcount-mapreduce-worker 
     container_name: mr_worker1
     ports:
-      # Map host port 50051 to container port 50051 (Optional, mainly for debugging)
       - "50051:50051"
     environment:
-      # Pass the worker ID as an environment variable (optional, for logging)
       WORKER_ID: 1
 
   worker2:
-    image: mapreduce-worker # Use the same image
+    image: wordcount-mapreduce-worker 
     container_name: mr_worker2
     ports:
       - "50052:50051"
@@ -24,27 +22,39 @@ services:
       WORKER_ID: 2
 
   worker3:
-    image: mapreduce-worker
+    image: wordcount-mapreduce-worker
     container_name: mr_worker3
     ports:
       - "50053:50051"
     environment:
       WORKER_ID: 3
 
+  worker4:
+    image: wordcount-mapreduce-worker
+    container_name: mr_worker4
+    ports:
+      - "50054:50051"
+    environment:
+      WORKER_ID: 4
+
+  worker5:
+    image: wordcount-mapreduce-worker
+    container_name: mr_worker5
+    ports:
+      - "50055:50051"
+    environment:
+      WORKER_ID: 5
+
   # --- Client (Master) Service ---
-  # The client needs to run in a separate container so it can communicate with the workers
   client:
-    build: .
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    image: wordcount-mapreduce-client
     container_name: mr_client
-    # The client must run AFTER the workers are up
     depends_on:
       - worker1
       - worker2
       - worker3
-    # We will pass the input file content to the client in the next step, 
-    # but for simplicity, let's mount the input file:
-    volumes:
-      - ./test1.txt:/app/test1.txt
-      - ./client.py:/app/client.py
-    # Command to run the client script
-    command: python client.py
+      - worker4
+      - worker5

@@ -1,19 +1,22 @@
+import os
 import grpc
 import time
 from concurrent import futures
-import mapreduce_pb2
-import mapreduce_pb2_grpc
+from proto import mapreduce_pb2, mapreduce_pb2_grpc
 
 # --- Configuration ---
-# The port this worker will listen on. 
-# Remember to adjust this if running multiple workers (e.g., 50051, 50052, etc.)
-PORT = '50051' 
+# Get worker ID from environment variable, default to 1 if not set
+WORKER_ID = int(os.environ.get('WORKER_ID', 1))
+# Base port is 50051, each worker gets assigned sequential ports
+PORT = str(50051)  # Within container, always use 50051
 
 class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServiceServicer):
-    
+    def __init__(self):
+        self.worker_id = WORKER_ID
+        
     def MapTask(self, request, context):
         """Processes a chunk of text and emits (word:1) pairs."""
-        print(f"Worker received MapTask for chunk: '{request.input_data[:30]}...'")
+        print(f"Worker {self.worker_id} received MapTask for chunk: '{request.input_data[:30]}...'")
         
         text = request.input_data.lower()
         # Simple tokenization: split by whitespace and remove non-alphanumeric chars
@@ -35,6 +38,7 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServiceServicer):
 
     def ReduceTask(self, request, context):
         """Aggregates all "key:value" strings and produces a final count."""
+        print(f"Worker {self.worker_id} received ReduceTask")
         
         # 1. Group the mapped data for aggregation
         counts = {}
@@ -62,14 +66,13 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServiceServicer):
 def serve():
     # Set up the server
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    mapreduce_pb2_grpc.add_MapReduceServiceServicer_to_server(
-        MapReduceServicer(), server
-    )
+    servicer = MapReduceServicer()
+    mapreduce_pb2_grpc.add_MapReduceServiceServicer_to_server(servicer, server)
     
     # Start the server on the defined port
     server.add_insecure_port(f'[::]:{PORT}')
     server.start()
-    print(f"MapReduce Worker Server running on port {PORT}...")
+    print(f"MapReduce Worker {WORKER_ID} running on port {PORT}...")
     
     try:
         # Keep the server running indefinitely
