@@ -8,8 +8,9 @@ WORKDIR /app
 COPY proto/ /app/proto/
 COPY client/ /app/client/
 
-# Install gRPC and protobuf dependencies
-RUN pip install --no-cache-dir grpcio grpcio-tools
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Define the command to run the worker (server) when the container starts
 CMD ["python", "-m", "client.client"]

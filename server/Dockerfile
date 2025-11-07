@@ -8,8 +8,9 @@ WORKDIR /app
 COPY proto/ /app/proto/
 COPY server/ /app/server/
 
-# Install gRPC and protobuf dependencies
-RUN pip install --no-cache-dir grpcio grpcio-tools
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # The worker server will always run on port 50051 inside the container
 EXPOSE 50051
