@@ -16,9 +16,12 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServiceServicer):
         
     def MapTask(self, request, context):
         """Processes a chunk of text and emits (word:1) pairs."""
-        print(f"Worker {self.worker_id} received MapTask for chunk: '{request.input_data[:30]}...'")
+        wall_start = time.perf_counter()
+        compute_start = time.perf_counter()
+
+        print(f"Worker {self.worker_id} received MapTask for chunk: '{(request.input_data or '')[:30]}...'")
         
-        text = request.input_data.lower()
+        text = (request.input_data or "").lower()
         # Simple tokenization: split by whitespace and remove non-alphanumeric chars
         words = [
             ''.join(filter(str.isalnum, word)) 
@@ -31,13 +34,26 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServiceServicer):
                 # Emit result as a string: "word:1"
                 intermediate_results.append(f"{word}:1")
 
-        print(f"MapTask completed. {len(intermediate_results)} intermediate results generated.")
+        compute_end = time.perf_counter()
+        wall_end = time.perf_counter()
+        compute_dur = compute_end - compute_start
+        wall_dur = wall_end - wall_start
+
+        print(f"MapTask completed. {len(intermediate_results)} intermediate results generated. "
+              f"compute={compute_dur:.6f}s wall={wall_dur:.6f}s")
         
+        # Append timing metadata as a special entry so client can parse it
+        timing_entry = f"__TIMING__ compute_time={compute_dur:.6f} wall_time={wall_dur:.6f}"
+        intermediate_results.append(timing_entry)
+
         # Return the intermediate data directly to the client (Master)
         return mapreduce_pb2.MapResponse(mapped=intermediate_results)
 
     def ReduceTask(self, request, context):
         """Aggregates all "key:value" strings and produces a final count."""
+        wall_start = time.perf_counter()
+        compute_start = time.perf_counter()
+
         print(f"Worker {self.worker_id} received ReduceTask")
         
         # 1. Group the mapped data for aggregation
@@ -52,13 +68,18 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServiceServicer):
                 print(f"Warning: Skipping invalid intermediate pair: {item}")
 
         # 2. Format the final result string
-        # Assuming the reducer should return the combined result of its task
         final_results = []
         for key, count in counts.items():
             final_results.append(f"{key}:{count}")
 
-        final_output = "\n".join(final_results)
-        print(f"ReduceTask completed. Final output:\n{final_output}")
+        compute_end = time.perf_counter()
+        wall_end = time.perf_counter()
+        compute_dur = compute_end - compute_start
+        wall_dur = wall_end - wall_start
+
+        timing_line = f"__TIMING__ compute_time={compute_dur:.6f} wall_time={wall_dur:.6f}"
+        final_output = "\n".join(final_results + [timing_line])
+        print(f"ReduceTask completed. Final output lines: {len(final_results)} compute={compute_dur:.6f}s wall={wall_dur:.6f}s")
         
         return mapreduce_pb2.ReduceResponse(result=final_output)
 
