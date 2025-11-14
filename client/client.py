@@ -4,247 +4,175 @@ from collections import defaultdict
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import re
 
-# --- Configuration ---
-# Addresses of workers (service names + internal port in Docker network)
-WORKER_ADDRESSES = [
-    'worker1:50051',  
-    'worker2:50051',  
-    'worker3:50051',  
-    'worker4:50051',
-    'worker5:50051',
-]
-NUM_WORKERS = len(WORKER_ADDRESSES)
-INPUT_FILE_NAME = "test1.txt" 
+# Configuration
+NUM_WORKERS = int(os.environ.get('NUM_WORKERS', '2'))
+WORKER_ADDRESSES = [f'worker{i+1}:50051' for i in range(NUM_WORKERS)]
+INPUT_FILE_NAME = "test1.txt"
 
-TIMING_RE = re.compile(r"__TIMING__\s+compute_time=([0-9.]+)\s+wall_time=([0-9.]+)")
+print(f"\n{'='*60}")
+print(f"MapReduce Configuration: {NUM_WORKERS} Worker(s)")
+print(f"{'='*60}")
 
 def read_input_file(filename):
-    """Reads the entire content of the input file."""
-    # Modify path to look in client directory
+    """Read input file."""
     filepath = os.path.join('client', filename)
-    
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Error: The input file '{filename}' was not found in the client directory.")
-        
     print(f"Reading input data from: {filepath}")
     with open(filepath, 'r', encoding='utf-8') as f:
         return f.read()
 
 def split_input_data(data, num_chunks):
-    """Splits the input text roughly equally into the required number of chunks."""
+    """Split input data into chunks for workers."""
     chunk_size = len(data) // num_chunks
     chunks = []
-    
     for i in range(num_chunks):
         start = i * chunk_size
         end = (i + 1) * chunk_size if i < num_chunks - 1 else len(data)
         chunks.append(data[start:end])
-        
     return chunks
 
-def _parse_map_response(mapped_list):
-    compute = 0.0
-    wall = 0.0
-    filtered = []
-    for entry in mapped_list:
-        m = TIMING_RE.match(entry) if isinstance(entry, str) else None
-        if m:
-            compute += float(m.group(1))
-            wall += float(m.group(2))
-        else:
-            filtered.append(entry)
-    return filtered, compute, wall
-
-def _parse_reduce_response(result_str):
-    compute = 0.0
-    wall = 0.0
-    if not result_str:
-        return {}, compute, wall
-    lines = [l for l in result_str.splitlines() if l.strip()]
-    if not lines:
-        return {}, compute, wall
-    last = lines[-1]
-    m = TIMING_RE.match(last)
-    result_lines = lines
-    if m:
-        compute = float(m.group(1))
-        wall = float(m.group(2))
-        result_lines = lines[:-1]
-    parsed = {}
-    for line in result_lines:
-        try:
-            k, v = line.split(':', 1)
-            parsed[k] = int(v)
-        except ValueError:
-            pass
-    return parsed, compute, wall
-
 def run_map_phase(chunks):
-    """Initiates MapTasks on the workers in parallel and collects all intermediate results."""
+    """Execute Map phase - send chunks to workers and collect results."""
+    stubs = [mapreduce_pb2_grpc.MapReduceServiceStub(grpc.insecure_channel(addr)) for addr in WORKER_ADDRESSES]
     all_intermediate_data = []
-    map_compute_sum = 0.0
-    map_wall_sum = 0.0
-
-    stubs = [
-        mapreduce_pb2_grpc.MapReduceServiceStub(grpc.insecure_channel(addr))
-        for addr in WORKER_ADDRESSES
-    ]
     
-    print(f"\n--- Starting Map Phase on {NUM_WORKERS} Workers (parallel) ---")
-    wall_start = time.perf_counter()
+    print(f"\n[Map Phase] Starting on {NUM_WORKERS} worker(s)...")
+    start_time = time.perf_counter()
 
-    with ThreadPoolExecutor(max_workers=NUM_WORKERS) as exe:
+    with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:
         futures = {}
         for i, chunk in enumerate(chunks):
             worker_index = i % NUM_WORKERS
-            stub = stubs[worker_index]
-            futures[exe.submit(stub.MapTask, mapreduce_pb2.MapRequest(input_data=chunk), 10)] = worker_index
+            future = executor.submit(stubs[worker_index].MapTask, mapreduce_pb2.MapRequest(input_data=chunk), 10)
+            futures[future] = worker_index
 
-        for fut in as_completed(futures):
-            worker_index = futures[fut]
-            worker_addr = WORKER_ADDRESSES[worker_index]
+        for future in as_completed(futures):
+            worker_index = futures[future]
             try:
-                map_response = fut.result()
-                if map_response and map_response.mapped:
-                    filtered, c, w = _parse_map_response(list(map_response.mapped))
-                    all_intermediate_data.extend(filtered)
-                    map_compute_sum += c
-                    map_wall_sum += w
-                    print(f"  <- Received {len(filtered)} results from {worker_addr} (compute={c:.6f}s wall={w:.6f}s)")
+                response = future.result()
+                if response and response.mapped:
+                    all_intermediate_data.extend(response.mapped)
             except grpc.RpcError as e:
+                worker_addr = WORKER_ADDRESSES[worker_index]
                 print(f"!!! Error calling MapTask on {worker_addr}: {e.details()}")
             except Exception as e:
-                print(f"!!! Unexpected error waiting for MapTask: {e}")
+                print(f"!!! Unexpected error: {e}")
 
-    wall_elapsed = time.perf_counter() - wall_start
-    print(f"Map phase complete. wall_elapsed={wall_elapsed:.6f}s compute_sum={map_compute_sum:.6f}s (sum of workers)")
-    return all_intermediate_data, map_compute_sum, wall_elapsed
+    elapsed = time.perf_counter() - start_time
+    print(f"[Map Phase] Complete - Time: {elapsed:.6f}s, Results: {len(all_intermediate_data)} pairs")
+    return all_intermediate_data, elapsed
 
 def run_reduce_phase(intermediate_data):
-    """Performs the shuffle, then initiates ReduceTasks in parallel."""
-    
-    # 1. SHUFFLE / GROUPING (Master groups the data by key)
+    """Execute Reduce phase - shuffle data and send to workers."""
+    # Shuffle: Group intermediate data by key
+    shuffle_start = time.perf_counter()
     grouped_data = defaultdict(list)
     for item in intermediate_data:
         try:
-            key, value = item.split(':', 1)
+            key, _ = item.split(':', 1)
             grouped_data[key].append(item)
         except ValueError:
             pass
-            
+    
     unique_keys = list(grouped_data.keys())
-    print(f"\n--- Shuffle Phase Complete. Found {len(unique_keys)} unique words. ---")
+    shuffle_elapsed = time.perf_counter() - shuffle_start
+    print(f"[Shuffle Phase] Complete - Time: {shuffle_elapsed:.6f}s, Unique keys: {len(unique_keys)}")
     
-    stubs = [
-        mapreduce_pb2_grpc.MapReduceServiceStub(grpc.insecure_channel(addr))
-        for addr in WORKER_ADDRESSES
-    ]
-    
+    # Reduce: Send grouped data to workers
+    stubs = [mapreduce_pb2_grpc.MapReduceServiceStub(grpc.insecure_channel(addr)) for addr in WORKER_ADDRESSES]
     final_results = {}
-    reduce_compute_sum = 0.0
-    reduce_wall_sum = 0.0
-
-    print(f"\n--- Starting Reduce Phase on {NUM_WORKERS} Workers (parallel, limited concurrency) ---")
-    wall_start = time.perf_counter()
-    # limit concurrency to NUM_WORKERS to avoid too many simultaneous RPCs
-    with ThreadPoolExecutor(max_workers=NUM_WORKERS) as exe:
+    
+    print(f"[Reduce Phase] Starting on {NUM_WORKERS} worker(s)...")
+    reduce_start = time.perf_counter()
+    
+    with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:
         futures = {}
         for i, key in enumerate(unique_keys):
-            worker_index = i % NUM_WORKERS 
-            stub = stubs[worker_index]
-            futures[exe.submit(stub.ReduceTask, mapreduce_pb2.ReduceRequest(mapped_data=grouped_data[key]), 10)] = (worker_index, key)
+            worker_index = i % NUM_WORKERS
+            future = executor.submit(
+                stubs[worker_index].ReduceTask,
+                mapreduce_pb2.ReduceRequest(mapped_data=grouped_data[key]),
+                10
+            )
+            futures[future] = key
 
-        for fut in as_completed(futures):
-            worker_index, key = futures[fut]
-            worker_addr = WORKER_ADDRESSES[worker_index]
+        for future in as_completed(futures):
+            key = futures[future]
             try:
-                reduce_response = fut.result()
-                if reduce_response and reduce_response.result is not None:
-                    parsed_map, c, w = _parse_reduce_response(reduce_response.result)
-                    reduce_compute_sum += c
-                    reduce_wall_sum += w
-                    # parsed_map may contain only the single key's result
-                    if key in parsed_map:
-                        final_results[key] = f"{key}:{parsed_map[key]}"
-                    else:
-                        # fallback: if reducer returned multiple lines, pick the first matching
-                        if parsed_map:
-                            # pick matching key if present
-                            if key in parsed_map:
-                                final_results[key] = f"{key}:{parsed_map[key]}"
-                            else:
-                                # otherwise store aggregated lines as string
-                                final_results[key] = "\n".join([f"{k}:{v}" for k,v in parsed_map.items()])
-                    print(f"  <- Received Reduce result for '{key}' from {worker_addr} (compute={c:.6f}s wall={w:.6f}s)")
+                response = future.result()
+                if response and response.result:
+                    final_results[key] = response.result
             except grpc.RpcError as e:
-                print(f"!!! Error calling ReduceTask on {worker_addr}: {e.details()}")
+                print(f"!!! Error calling ReduceTask: {e.details()}")
             except Exception as e:
-                print(f"!!! Unexpected error waiting for ReduceTask: {e}")
+                print(f"!!! Unexpected error: {e}")
 
-    wall_elapsed = time.perf_counter() - wall_start
-    print(f"Reduce phase complete. wall_elapsed={wall_elapsed:.6f}s compute_sum={reduce_compute_sum:.6f}s (sum of workers)")
-    return final_results, reduce_compute_sum, wall_elapsed
+    reduce_elapsed = time.perf_counter() - reduce_start
+    print(f"[Reduce Phase] Complete - Time: {reduce_elapsed:.6f}s, Results: {len(final_results)} keys")
+    return final_results, reduce_elapsed, shuffle_elapsed
+
+def parse_and_display_results(final_results):
+    """Parse and display word counts from server results."""
+    all_word_counts = {}
+    for result_str in final_results.values():
+        for line in result_str.split('\n'):
+            line = line.strip()
+            if line:
+                try:
+                    key, count = line.split(':', 1)
+                    all_word_counts[key] = int(count)
+                except ValueError:
+                    pass
+    
+    sorted_words = sorted(all_word_counts.items(), key=lambda item: item[1], reverse=True)
+    for key, count in sorted_words:
+        print(f"  {key}: {count}")
 
 def run_mapreduce():
-    # Initialize start_time to ensure it exists for the finally block
-    start_time = 0
+    """Main coordinator - orchestrates MapReduce job."""
+    start_time = time.perf_counter()
+    map_wall = reduce_wall = shuffle_wall = 0.0
+    
     try:
-        # --- Start Timer ---
-        start_time = time.time()
-        print(f"\n[TIMER] MapReduce Job started at {time.ctime(start_time)}")
-        # -------------------
-
-        # Step A: Read the file content
+        # Read and split input
         input_data = read_input_file(INPUT_FILE_NAME)
-        
-        # 1. Split Data
         chunks = split_input_data(input_data, NUM_WORKERS)
-        print(f"Input text split into {len(chunks)} chunks.")
+        print(f"[Setup] Input split into {len(chunks)} chunk(s)")
         
-        # 2. Map Phase (parallel)
-        intermediate_data, map_compute_sum, map_wall = run_map_phase(chunks)
+        # Map phase
+        intermediate_data, map_wall = run_map_phase(chunks)
         
-        # 3. Reduce Phase (parallel)
-        final_counts, reduce_compute_sum, reduce_wall = run_reduce_phase(intermediate_data)
+        # Reduce phase
+        final_results, reduce_wall, shuffle_wall = run_reduce_phase(intermediate_data)
         
-        # 4. Final Output
-        print("\n==================================")
-        print("       FINAL WORD COUNTS        ")
-        print("==================================")
+        # Display results
+        print("\n" + "="*60)
+        print("FINAL WORD COUNTS")
+        print("="*60)
+        parse_and_display_results(final_results)
+        print("="*60)
         
-        parsed_output = {}
-        for result_str in final_counts.values():
-            for line in result_str.split('\n'):
-                if line:
-                    try:
-                        key, count = line.split(':')
-                        parsed_output[key] = int(count)
-                    except ValueError:
-                        pass
-        
-        # Sort and print
-        for key, count in sorted(parsed_output.items(), key=lambda item: item[1], reverse=True):
-            print(f"{key}: {count}")
-        print("==================================")
-
     except FileNotFoundError as e:
         print(e)
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
     finally:
-        # --- Stop Timer and Log Duration ---
-        end_time = time.time()
+        # Performance summary
+        end_time = time.perf_counter()
         total_duration = end_time - start_time
+        overhead = total_duration - map_wall - shuffle_wall - reduce_wall
         
-        total_compute = map_compute_sum + reduce_compute_sum if 'map_compute_sum' in locals() and 'reduce_compute_sum' in locals() else 0.0
-        total_wall_stages = (map_wall if 'map_wall' in locals() else 0.0) + (reduce_wall if 'reduce_wall' in locals() else 0.0)
-        print(f"\n[TIMER] MapReduce Job finished at {time.ctime(end_time)}")
-        print(f"[TIMER] Total Execution Time (wall clock): {total_duration:.4f} seconds")
-        print(f"[TIMER] Total Compute Time (sum of worker compute durations): {total_compute:.6f} seconds")
-        print(f"[TIMER] Map wall phase elapsed: {(map_wall if 'map_wall' in locals() else 0.0):.6f}s, Reduce wall phase elapsed: {(reduce_wall if 'reduce_wall' in locals() else 0.0):.6f}s")
-        # -----------------------------------
+        print(f"\n{'='*60}")
+        print(f"PERFORMANCE SUMMARY - {NUM_WORKERS} Worker(s)")
+        print(f"{'='*60}")
+        print(f"Total Execution Time:     {total_duration:.6f} seconds")
+        print(f"  Map Phase:             {map_wall:.6f} seconds")
+        print(f"  Shuffle Phase:         {shuffle_wall:.6f} seconds")
+        print(f"  Reduce Phase:          {reduce_wall:.6f} seconds")
+        print(f"  Other (overhead):      {overhead:.6f} seconds")
+        print(f"{'='*60}\n")
 
 
 if __name__ == '__main__':

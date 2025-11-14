@@ -1,7 +1,15 @@
 version: '3.8'
 
+# Set NUM_WORKERS environment variable to control number of workers
+# Default is 2 if not set. Change this value to scale workers.
+# Example: NUM_WORKERS=2 docker-compose up
+# Or set it in your shell: export NUM_WORKERS=2
+# The client will automatically use only the first NUM_WORKERS workers
+
 services:
   # --- Worker Services ---
+  # Workers are defined up to 10. The client will automatically use only 
+  # the first NUM_WORKERS workers based on the NUM_WORKERS environment variable.
   worker1:
     build: 
       context: .
@@ -45,6 +53,14 @@ services:
     environment:
       WORKER_ID: 5
 
+  worker6:
+    image: wordcount-mapreduce-worker
+    container_name: mr_worker6
+    ports:
+      - "50056:50051"
+    environment:
+      WORKER_ID: 6
+
   # --- Client (Master) Service ---
   client:
     build:
@@ -52,9 +68,13 @@ services:
       dockerfile: client/Dockerfile
     image: wordcount-mapreduce-client
     container_name: mr_client
+    environment:
+      # Pass NUM_WORKERS to client (defaults to 2 if not set)
+      NUM_WORKERS: ${NUM_WORKERS:-2}
     depends_on:
       - worker1
       - worker2
       - worker3
       - worker4
       - worker5
+      - worker6
