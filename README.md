@@ -51,16 +51,16 @@ The application supports dynamic worker configuration. You can specify the numbe
 ### Windows (PowerShell)
 
 ```powershell
-$env:NUM_WORKERS=3; docker compose up --build
+$env:NUM_WORKERS=2; docker compose up --build
 ```
 
 ### Linux / Mac
 
 ```bash
-NUM_WORKERS=3 docker compose up --build
+NUM_WORKERS=2 docker compose up --build
 ```
 
-> Adjust the number `3` to the desired number of workers (1–6).
+> Adjust the number `2` to the desired number of workers (1–6).
 
 ---
 
@@ -121,7 +121,7 @@ Update the value:
 
 ```yaml
 data:
-  NUM_WORKERS: "3"
+  NUM_WORKERS: "2"
 ```
 
 - Supported worker count: 1–6
@@ -157,7 +157,7 @@ kubectl create job --from=job/mr-client-job mr-client-job-rerun -n wordcount-mr
 ## Notes
 
 - The default number of workers is **2** if `NUM_WORKERS` is not specified
-- You can scale worker pods up or down using `kubectl scale deployment <worker-deployment> --replicas=<n>`
+- The maximum number of workers is limited to 6 only.
 - Docker Compose is recommended for local testing
 - Kubernetes is recommended for more realistic distributed execution and orchestration
 

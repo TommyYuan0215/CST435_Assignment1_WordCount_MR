@@ -16,14 +16,13 @@ metadata:
   name: wordcount-config
   namespace: wordcount-mr
 data:
-  NUM_WORKERS: "3" # Change this to the number of workers your client should use
+  NUM_WORKERS: "2" # Change this to the number of workers your client should use
 
 ---
 # =========================
 # Worker Deployments & Services
 # =========================
 
-# Worker template: you can duplicate/change WORKER_ID and names
 # Worker 1
 apiVersion: apps/v1
 kind: Deployment

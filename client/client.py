@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Configuration
 NUM_WORKERS = int(os.environ.get('NUM_WORKERS', '2'))
 WORKER_ADDRESSES = [f'worker{i+1}:50051' for i in range(NUM_WORKERS)]
-INPUT_FILE_NAME = "test1.txt"
+INPUT_FILE_NAME = "test_input.txt"
 
 print(f"\n{'='*60}")
 print(f"MapReduce Configuration: {NUM_WORKERS} Worker(s)")
