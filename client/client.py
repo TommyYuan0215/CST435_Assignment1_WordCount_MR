@@ -8,7 +8,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Configuration
 NUM_WORKERS = int(os.environ.get('NUM_WORKERS', '2'))
 WORKER_ADDRESSES = [f'worker{i+1}:50051' for i in range(NUM_WORKERS)]
-INPUT_FILE_NAME = "test_input.txt"
+INPUT_FILE_NAME = "testfile_512kb.txt"
+GRPC_OPTIONS = [
+    ('grpc.max_send_message_length', 50 * 1024 * 1024),    # 50 MB
+    ('grpc.max_receive_message_length', 50 * 1024 * 1024)  # 50 MB
+]
 
 print(f"\n{'='*60}")
 print(f"MapReduce Configuration: {NUM_WORKERS} Worker(s)")
@@ -35,7 +39,13 @@ def split_input_data(data, num_chunks):
 
 def run_map_phase(chunks):
     """Execute Map phase - send chunks to workers and collect results."""
-    stubs = [mapreduce_pb2_grpc.MapReduceServiceStub(grpc.insecure_channel(addr)) for addr in WORKER_ADDRESSES]
+    stubs = [
+        mapreduce_pb2_grpc.MapReduceServiceStub(
+            grpc.insecure_channel(addr, options=GRPC_OPTIONS)
+        )
+        for addr in WORKER_ADDRESSES
+    ]
+    
     all_intermediate_data = []
     
     print(f"\n[Map Phase] Starting on {NUM_WORKERS} worker(s)...")

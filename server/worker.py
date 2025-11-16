@@ -62,20 +62,27 @@ class MapReduceServicer(mapreduce_pb2_grpc.MapReduceServiceServicer):
 
 
 def serve():
-    """Start the gRPC server."""
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    """Start the gRPC server with increased max message size."""
+    # Increase gRPC max message size to 50 MB
+    server_options = [
+        ('grpc.max_send_message_length', 50 * 1024 * 1024),
+        ('grpc.max_receive_message_length', 50 * 1024 * 1024)
+    ]
+
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10), options=server_options)
     servicer = MapReduceServicer()
     mapreduce_pb2_grpc.add_MapReduceServiceServicer_to_server(servicer, server)
     
     server.add_insecure_port(f'[::]:{PORT}')
     server.start()
     print(f"MapReduce Worker {WORKER_ID} running on port {PORT}...")
-    
+
     try:
         while True:
             time.sleep(86400)
     except KeyboardInterrupt:
         server.stop(0)
+
 
 if __name__ == '__main__':
     serve()
