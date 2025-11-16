@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+// MapReduce Service Definition
+// This service defines the Map and Reduce operations for the word count application
+
+service MapReduceService {
+  // MapTask processes a chunk of input text and emits (word:1) pairs
+  rpc MapTask(MapRequest) returns (MapResponse);
+  
+  // ReduceTask aggregates values for each key and produces final counts
+  rpc ReduceTask(ReduceRequest) returns (ReduceResponse);
+}
+
+// Request message for MapTask
+message MapRequest {
+  string input_data = 1;  // The input text chunk to process
+}
+
+// Response message for MapTask
+message MapResponse {
+  repeated string mapped = 1;  // List of intermediate key-value pairs (e.g., "word:1")
+}
+
+// Request message for ReduceTask
+message ReduceRequest {
+  repeated string mapped_data = 1;  // List of intermediate data for a specific key
+}
+
+// Response message for ReduceTask
+message ReduceResponse {
+  string result = 1;  // Final aggregated result (e.g., "word:count")
+}
+
