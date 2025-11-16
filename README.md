@@ -11,6 +11,7 @@
 ### Prerequisites
 
 - Docker and Docker Compose installed on your system
+- Docker Dekstop (with Kubernetes enabled)
 
 ### Running the MapReduce Word Count Application
 
@@ -26,6 +27,15 @@ $env:NUM_WORKERS=3; docker compose up --build
 
 ```bash
 NUM_WORKERS=3 docker compose up --build
+```
+
+### K8s
+
+```bash
+docker build -t wordcount-mapreduce-worker -f server/Dockerfile
+docker build -t wordcount-mapreduce-client -f client/Dockerfile
+kubectl apply -f workers.yml
+kubectl apply -f workers.yml
 ```
 
 ### Notes
