@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Configuration
 NUM_WORKERS = int(os.environ.get('NUM_WORKERS', '2'))
 WORKER_ADDRESSES = [f'worker{i+1}:50051' for i in range(NUM_WORKERS)]
-INPUT_FILE_NAME = "testfile_512kb.txt"
+INPUT_FILE_NAME = "testfile.txt"
 GRPC_OPTIONS = [
     ('grpc.max_send_message_length', 50 * 1024 * 1024),    # 50 MB
     ('grpc.max_receive_message_length', 50 * 1024 * 1024)  # 50 MB

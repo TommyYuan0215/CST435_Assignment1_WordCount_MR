@@ -159,7 +159,7 @@ kubectl create job --from=job/mr-client-job mr-client-job-rerun -n wordcount-mr
 - The default number of workers is **2** if `NUM_WORKERS` is not specified
 - The maximum number of workers is limited to 6 only.
 - Docker Compose is recommended for local testing.
-- This project will be given 2 text file for testing purposes, which including `testfile_30mb.txt` and `testfile_512kb.txt` that already inside the client folder.
+- This project will be given one text file for testing purposes, which including `testfile.txt` with approximate 5MB size.
 - Kubernetes is recommended for more realistic distributed execution and orchestration
 
 ---
