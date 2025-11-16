@@ -1,0 +1,18 @@
+# client-job.yml
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mr-client-job
+spec:
+  template:
+    spec:
+      containers:
+      - name: client
+        image: wordcount-mapreduce-client
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: NUM_WORKERS
+          value: "3" # Set your worker count here
+      restartPolicy: Never
+  backoffLimit: 1
