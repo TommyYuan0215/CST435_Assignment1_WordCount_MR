@@ -35,7 +35,7 @@ NUM_WORKERS=3 docker compose up --build
 docker build -t wordcount-mapreduce-worker -f server/Dockerfile
 docker build -t wordcount-mapreduce-client -f client/Dockerfile
 kubectl apply -f workers.yml
-kubectl apply -f workers.yml
+kubectl apply -f client-job.yml
 ```
 
 ### Notes
