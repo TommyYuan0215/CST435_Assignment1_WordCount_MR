@@ -74,15 +74,15 @@ services:
       # -------------------------------------------------------------
       # NEW: extra_hosts for dynamic external/internal worker connection
       # -------------------------------------------------------------
-      extra_hosts:
-        # If WX_IP is provided, use it (external). 
-        # If not, use 'host.docker.internal' (internal fallback via port map).
-        - "worker1:${W1_IP:-host.docker.internal}"
-        - "worker2:${W2_IP:-host.docker.internal}"
-        - "worker3:${W3_IP:-host.docker.internal}"
-        - "worker4:${W4_IP:-host.docker.internal}"
-        - "worker5:${W5_IP:-host.docker.internal}"
-        - "worker6:${W6_IP:-host.docker.internal}"
+    extra_hosts:
+      # If WX_IP is provided, use it (external). 
+      # If not, use 'host.docker.internal' (internal fallback via port map).
+      - "worker1:${W1_IP:-host.docker.internal}"
+      - "worker2:${W2_IP:-host.docker.internal}"
+      # - "worker3:${W3_IP:-host.docker.internal}"
+      # - "worker4:${W4_IP:-host.docker.internal}"
+      # - "worker5:${W5_IP:-host.docker.internal}"
+      # - "worker6:${W6_IP:-host.docker.internal}"
     depends_on:
       - worker1
       - worker2
