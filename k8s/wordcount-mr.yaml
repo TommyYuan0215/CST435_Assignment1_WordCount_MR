@@ -16,7 +16,7 @@ metadata:
   name: wordcount-config
   namespace: wordcount-mr
 data:
-  NUM_WORKERS: "2" # Change this to the number of workers your client should use
+  NUM_WORKERS: "6" # Change this to the number of workers your client should use
 
 ---
 # =========================
