@@ -14,7 +14,7 @@ services:
     build: 
       context: .
       dockerfile: server/Dockerfile
-    image: wordcount-mapreduce-worker 
+    image: tommyyuan0215/wordcount-mapreduce-worker 
     container_name: mr_worker1
     ports:
       - "50051:50051"
@@ -22,7 +22,7 @@ services:
       WORKER_ID: 1
 
   worker2:
-    image: wordcount-mapreduce-worker 
+    image: tommyyuan0215/wordcount-mapreduce-worker 
     container_name: mr_worker2
     ports:
       - "50052:50051"
@@ -30,7 +30,7 @@ services:
       WORKER_ID: 2
 
   worker3:
-    image: wordcount-mapreduce-worker
+    image: tommyyuan0215/wordcount-mapreduce-worker
     container_name: mr_worker3
     ports:
       - "50053:50051"
@@ -38,7 +38,7 @@ services:
       WORKER_ID: 3
 
   worker4:
-    image: wordcount-mapreduce-worker
+    image: tommyyuan0215/wordcount-mapreduce-worker
     container_name: mr_worker4
     ports:
       - "50054:50051"
@@ -46,7 +46,7 @@ services:
       WORKER_ID: 4
 
   worker5:
-    image: wordcount-mapreduce-worker
+    image: tommyyuan0215/wordcount-mapreduce-worker
     container_name: mr_worker5
     ports:
       - "50055:50051"
@@ -54,7 +54,7 @@ services:
       WORKER_ID: 5
 
   worker6:
-    image: wordcount-mapreduce-worker
+    image: tommyyuan0215/wordcount-mapreduce-worker
     container_name: mr_worker6
     ports:
       - "50056:50051"
