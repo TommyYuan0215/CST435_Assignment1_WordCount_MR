@@ -1,0 +1,72 @@
+Section 5: Implementation Details
+
+5.1 Algorithm / Approach Description
+
+The MapReduce word count implementation follows the classic MapReduce paradigm with three distinct phases executed sequentially. The client orchestrates the entire process, while workers execute the computational tasks via REST API calls.
+
+Map Phase: The input text file is divided into N chunks (where N equals the number of workers). Each chunk is sent to a worker node in parallel using HTTP POST requests to the /map endpoint. Workers tokenize their assigned chunk by converting text to lowercase, splitting by whitespace, and filtering for alphanumeric characters. Each worker returns a dictionary mapping words to their occurrence counts within that chunk. The client collects all intermediate results using ThreadPoolExecutor for concurrent execution.
+
+Shuffle Phase: The client aggregates intermediate results by grouping all counts for each unique word across all map outputs. This creates a dictionary where each key (word) maps to a list of counts from different chunks. The shuffle phase is performed locally on the client to prepare data for the reduce phase.
+
+Reduce Phase: Words are partitioned across workers using a round-robin approach (word_index % NUM_WORKERS). For each word, individual count dictionaries are created and assigned to workers. Workers receive a list of dictionaries via POST to /reduce and aggregate counts by summing values for matching keys. The client collects partial results from all workers and merges them into the final word count dictionary. Results are sorted by frequency and displayed.
+
+Key Design Decisions: REST API over gRPC for simplicity and human-readable debugging. Docker service names (worker1, worker2) enable container-to-container communication. ThreadPoolExecutor ensures parallelism within the client while workers process requests sequentially per endpoint.
+
+
+5.2 Key Code Snippets
+
+Client: Map Phase Parallel Execution
+
+    with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:
+        futures = {}
+        for i, chunk in enumerate(chunks):
+            worker_index = i % NUM_WORKERS
+            worker_url = WORKER_ADDRESSES[worker_index] + "/map"
+            future = executor.submit(
+                lambda url, c: requests.post(url, json={"chunk": c}).json(),
+                worker_url, chunk
+            )
+            futures[future] = worker_index
+
+Worker: Tokenization and Map Task
+
+    def _tokenize_text(text):
+        text = text.lower()
+        words = [''.join(filter(str.isalnum, word)) for word in text.split()]
+        return [word for word in words if word]
+
+    @app.route("/map", methods=["POST"])
+    def map_task():
+        input_text = request.json.get("chunk", "")
+        words = _tokenize_text(input_text)
+        intermediate_results = {}
+        for word in words:
+            intermediate_results[word] = intermediate_results.get(word, 0) + 1
+        return jsonify(intermediate_results)
+
+Client: Shuffle and Reduce Phase
+
+    # Shuffle: group data by word
+    grouped_data = defaultdict(list)
+    for data_dict in intermediate_data:
+        for word, count in data_dict.items():
+            grouped_data[word].append(count)
+
+    # Partition and send to workers
+    worker_data = [[] for _ in range(NUM_WORKERS)]
+    for i, key in enumerate(unique_keys):
+        worker_index = i % NUM_WORKERS
+        for count in grouped_data[key]:
+            worker_data[worker_index].append({key: count})
+
+Worker: Reduce Task Aggregation
+
+    @app.route("/reduce", methods=["POST"])
+    def reduce_task():
+        counts_list = request.json.get("counts", [])
+        final_counts = defaultdict(int)
+        for count_dict in counts_list:
+            for key, count in count_dict.items():
+                final_counts[key] += count
+        return jsonify(final_counts)
+
