@@ -6,7 +6,7 @@ import requests
 
 # Configuration
 NUM_WORKERS = int(os.environ.get('NUM_WORKERS', '2'))
-WORKER_ADDRESSES = [f"http://localhost:{5001 + i}" for i in range(NUM_WORKERS)]
+WORKER_ADDRESSES = [f"http://worker{i+1}:5000" for i in range(NUM_WORKERS)]
 INPUT_FILE_NAME = "testfile.txt"
 
 print(f"\n{'='*60}")
@@ -73,28 +73,45 @@ def run_reduce_phase(intermediate_data):
     shuffle_elapsed = time.perf_counter() - shuffle_start
     print(f"[Shuffle Phase] Complete - Time: {shuffle_elapsed:.6f}s, Unique keys: {len(unique_keys)}")
 
+    # Partition keys across workers and prepare data in format worker expects
+    # Worker expects: {"counts": [{word1: count1}, {word2: count2}, ...]}
+    # So we need to send lists of dictionaries, not lists of numbers
+    worker_data = [[] for _ in range(NUM_WORKERS)]
+    for i, key in enumerate(unique_keys):
+        worker_index = i % NUM_WORKERS
+        # Each dictionary represents counts from one map result
+        # For each count value, create a dict with the word and its count
+        for count in grouped_data[key]:
+            worker_data[worker_index].append({key: count})
+
     # Reduce: send grouped data to workers
     final_results = {}
     print(f"[Reduce Phase] Starting on {NUM_WORKERS} worker(s)...")
     reduce_start = time.perf_counter()
 
+    def send_reduce_request(url, data):
+        """Helper function to send reduce request to worker."""
+        return requests.post(url, json={"counts": data}).json()
+
     with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:
         futures = {}
-        for i, key in enumerate(unique_keys):
-            worker_index = i % NUM_WORKERS
-            worker_url = WORKER_ADDRESSES[worker_index] + "/reduce"
-            future = executor.submit(lambda url, k, counts: requests.post(url, json={"counts": counts}).json(), worker_url, key, grouped_data[key])
-            futures[future] = key
+        for worker_index in range(NUM_WORKERS):
+            if worker_data[worker_index]:  # Only send if there's data for this worker
+                worker_url = WORKER_ADDRESSES[worker_index] + "/reduce"
+                data_to_send = worker_data[worker_index]
+                future = executor.submit(send_reduce_request, worker_url, data_to_send)
+                futures[future] = worker_index
 
         for future in as_completed(futures):
-            key = futures[future]
+            worker_index = futures[future]
             try:
                 response = future.result()
-                if response is not None:
-                    # Each response is a single count for that word
-                    final_results[key] = sum(grouped_data[key])
+                if response:
+                    # Each worker returns a dict of aggregated word counts
+                    for word, count in response.items():
+                        final_results[word] = final_results.get(word, 0) + count
             except Exception as e:
-                print(f"!!! Error calling ReduceTask for key '{key}': {e}")
+                print(f"!!! Error calling ReduceTask on worker {worker_index}: {e}")
 
     reduce_elapsed = time.perf_counter() - reduce_start
     print(f"[Reduce Phase] Complete - Time: {reduce_elapsed:.6f}s, Results: {len(final_results)} keys")
