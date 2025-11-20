@@ -1,12 +1,4 @@
-# CST435_ASSIGNMENT1_WordCount_MR
-
-## Prepared by:
-
-- Tan Jun Lin (160989)
-- Peh Jia Jin (161059)
-- Ooi Tze Shen (165229)
-
----
+# CST435 MapReduce Word Count – gRPC Stack
 
 ## Table of Contents
 

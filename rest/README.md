@@ -1,12 +1,4 @@
-# REST MapReduce Word Count Application
-
-## Prepared by:
-
-- Tan Jun Lin (160989)
-- Peh Jia Jin (161059)
-- Ooi Tze Shen (165229)
-
----
+# CST435 MapReduce Word Count – REST Stack
 
 ## Table of Contents
 
