@@ -77,6 +77,9 @@ services:
     container_name: mr_client
     environment:
       NUM_WORKERS: ${NUM_WORKERS:-2}  # default 2 workers
+    extra_hosts:
+      - "worker1:${W1_IP:-host.docker.internal}"
+      - "worker2:${W2_IP:-host.docker.internal}"
     depends_on:
       - worker1
       - worker2
